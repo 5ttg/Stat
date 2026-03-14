@@ -1,39 +1,25 @@
 import requests
-import threading
-import itertools
-import time
 import os
 import random
 import string
+import time
+import sys
 
 API = "https://discord.com/api/v9/unique-username/username-attempt-unauthed"
 WEBHOOK = os.getenv("WEBHOOK_URL")
 
-THREADS = 1
-COOLDOWN = 2.5
-MAX_RETRIES = 5
 BATCH_SIZE = 700
+COOLDOWN = 1.3
 
 charset = string.ascii_lowercase + string.digits + "_"
-print("Webhook loaded:", bool(os.getenv("WEBHOOK_URL")), flush=True)
+
 print("[BOOT] Username checker starting", flush=True)
+print("[BOOT] Webhook loaded:", bool(WEBHOOK), flush=True)
 
-# load proxies
-try:
-    with open("proxies.txt", "r") as f:
-        proxies = [p.strip() for p in f if p.strip()]
-    print(f"[BOOT] Loaded {len(proxies)} proxies", flush=True)
-except:
-    proxies = []
-    print("[BOOT] No proxies loaded", flush=True)
-
-proxy_cycle = itertools.cycle(proxies) if proxies else None
-
-use_proxies = False
-current_proxy = None
-
-request_lock = threading.Lock()
-cooldown_lock = threading.Lock()
+session = requests.Session()
+session.headers.update({
+    "User-Agent": "Mozilla/5.0"
+})
 
 
 def generate_name():
@@ -47,13 +33,16 @@ def generate_batch():
     while len(names) < BATCH_SIZE:
         names.add(generate_name())
 
-    print(f"[BATCH] Generated {len(names)} usernames", flush=True)
-    return list(names)
+    batch = list(names)
+
+    print(f"[BATCH] Generated {len(batch)} usernames", flush=True)
+
+    return batch
 
 
 def send_webhook(name):
     if not WEBHOOK:
-        print("[WEBHOOK] not configured", flush=True)
+        print("[WEBHOOK] Not configured", flush=True)
         return
 
     try:
@@ -67,114 +56,67 @@ def send_webhook(name):
             }]
         }
 
-        r = requests.post(WEBHOOK, json=data, timeout=5)
-        print(f"[WEBHOOK] sent for {name} status={r.status_code}", flush=True)
+        r = session.post(WEBHOOK, json=data, timeout=5)
+
+        print(f"[WEBHOOK] Sent alert for {name} status={r.status_code}", flush=True)
 
     except Exception as e:
-        print(f"[WEBHOOK ERROR] {e}", flush=True)
-
-
-def get_proxy():
-    global current_proxy
-
-    if not use_proxies or not proxy_cycle:
-        return None
-
-    current_proxy = next(proxy_cycle)
-
-    print(f"[PROXY] {current_proxy}", flush=True)
-
-    return {
-        "http": f"http://{current_proxy}",
-        "https": f"http://{current_proxy}"
-    }
-
-
-def wait_global():
-    with cooldown_lock:
-        time.sleep(COOLDOWN)
+        print("[WEBHOOK ERROR]", e, flush=True)
 
 
 def check(name):
-    global use_proxies
 
-    retries = 0
+    try:
+        r = session.post(
+            API,
+            json={"username": name},
+            timeout=10
+        )
 
-    while retries < MAX_RETRIES:
+        if r.status_code == 200:
 
-        wait_global()
-        proxy = get_proxy()
+            data = r.json()
 
-        print(f"[CHECK] {name} try={retries+1}", flush=True)
-
-        try:
-            r = requests.post(
-                API,
-                json={"username": name},
-                proxies=proxy,
-                timeout=10
-            )
-
-            if r.status_code == 200:
-                data = r.json()
-
-                if data["taken"]:
-                    print(f"[TAKEN] {name}", flush=True)
-                else:
-                    print(f"[HIT] {name} AVAILABLE", flush=True)
-
-                    with open("hits.txt", "a") as f:
-                        f.write(name + "\n")
-
-                    send_webhook(name)
-
-                return
-
-            elif r.status_code == 429:
-
-                with request_lock:
-                    if not use_proxies:
-                        print("[RATE LIMIT] switching to proxies", flush=True)
-                        use_proxies = True
-                    else:
-                        print("[RATE LIMIT] rotating proxy", flush=True)
-
-                retries += 1
-                time.sleep(1)
-
+            if data["taken"]:
+                print(f"[TAKEN] {name}", flush=True)
             else:
-                print(f"[ERROR] {name} status={r.status_code}", flush=True)
-                return
+                print(f"[HIT] {name} AVAILABLE", flush=True)
 
-        except Exception as e:
-            print(f"[REQUEST ERROR] {name} error={e}", flush=True)
-            retries += 1
-            time.sleep(1)
+                with open("hits.txt", "a") as f:
+                    f.write(name + "\n")
 
-    print(f"[FAIL] {name}", flush=True)
+                send_webhook(name)
+
+        elif r.status_code == 429:
+
+            retry = r.headers.get("Retry-After", "unknown")
+
+            print("[RATE LIMIT] hit — retry after:", retry, flush=True)
+            print("[EXIT] Ending run so workflow restarts", flush=True)
+
+            sys.exit(0)
+
+        else:
+            print(f"[ERROR] {name} status={r.status_code}", flush=True)
+
+    except Exception as e:
+        print(f"[REQUEST ERROR] {name} {e}", flush=True)
 
 
-def worker(names):
-    for name in names:
-        check(name)
-
-
-while True:
+def main():
 
     batch = generate_batch()
 
-    print("[BATCH] Starting checks", flush=True)
+    for i, name in enumerate(batch, 1):
 
-    chunks = [batch[i::THREADS] for i in range(THREADS)]
+        print(f"[CHECK {i}/{BATCH_SIZE}] {name}", flush=True)
 
-    threads = []
+        check(name)
 
-    for i in range(THREADS):
-        t = threading.Thread(target=worker, args=(chunks[i],))
-        t.start()
-        threads.append(t)
+        time.sleep(random.uniform(COOLDOWN, COOLDOWN + 0.8))
 
-    for t in threads:
-        t.join()
+    print("[DONE] Finished batch of 700 usernames", flush=True)
 
-    print("[BATCH] Completed 700 usernames\n", flush=True)
+
+if __name__ == "__main__":
+    main()
