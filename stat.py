@@ -11,7 +11,7 @@ WEBHOOK = os.getenv("WEBHOOK_URL")
 BATCH_SIZE = 700
 COOLDOWN = 1.8
 
-charset = string.ascii_lowercase + string.digits + "_" + "."
+charset = string.ascii_lowercase + "_" + "."
 
 print("[BOOT] Username checker starting", flush=True)
 print("[BOOT] Webhook loaded:", bool(WEBHOOK), flush=True)
@@ -20,7 +20,6 @@ session = requests.Session()
 session.headers.update({
     "User-Agent": "Mozilla/5.0"
 })
-
 
 def generate_name():
     length = random.choice([3, 4])
