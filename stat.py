@@ -1,27 +1,31 @@
 import requests
 import threading
-import queue
 import itertools
 import time
 import os
+import random
+import string
 
 API = "https://discord.com/api/v9/unique-username/username-attempt-unauthed"
 WEBHOOK = os.getenv("WEBHOOK_URL")
 
-THREADS = 1
+THREADS = 5
 COOLDOWN = 1.5
 MAX_RETRIES = 5
+BATCH_SIZE = 700
 
-# load usernames
-with open("names.txt", "r", encoding="utf8") as f:
-    names = [x.strip() for x in f if x.strip()]
+charset = string.ascii_lowercase + string.digits + "_"
+
+print("[BOOT] Username checker starting", flush=True)
 
 # load proxies
 try:
     with open("proxies.txt", "r") as f:
         proxies = [p.strip() for p in f if p.strip()]
+    print(f"[BOOT] Loaded {len(proxies)} proxies", flush=True)
 except:
     proxies = []
+    print("[BOOT] No proxies loaded", flush=True)
 
 proxy_cycle = itertools.cycle(proxies) if proxies else None
 
@@ -31,13 +35,25 @@ current_proxy = None
 request_lock = threading.Lock()
 cooldown_lock = threading.Lock()
 
-q = queue.Queue()
-for name in names:
-    q.put(name)
+
+def generate_name():
+    length = random.choice([3, 4])
+    return "".join(random.choice(charset) for _ in range(length))
+
+
+def generate_batch():
+    names = set()
+
+    while len(names) < BATCH_SIZE:
+        names.add(generate_name())
+
+    print(f"[BATCH] Generated {len(names)} usernames", flush=True)
+    return list(names)
 
 
 def send_webhook(name):
     if not WEBHOOK:
+        print("[WEBHOOK] not configured", flush=True)
         return
 
     try:
@@ -51,10 +67,11 @@ def send_webhook(name):
             }]
         }
 
-        requests.post(WEBHOOK, json=data, timeout=5)
+        r = requests.post(WEBHOOK, json=data, timeout=5)
+        print(f"[WEBHOOK] sent for {name} status={r.status_code}", flush=True)
 
-    except:
-        pass
+    except Exception as e:
+        print(f"[WEBHOOK ERROR] {e}", flush=True)
 
 
 def get_proxy():
@@ -64,6 +81,8 @@ def get_proxy():
         return None
 
     current_proxy = next(proxy_cycle)
+
+    print(f"[PROXY] {current_proxy}", flush=True)
 
     return {
         "http": f"http://{current_proxy}",
@@ -86,6 +105,8 @@ def check(name):
         wait_global()
         proxy = get_proxy()
 
+        print(f"[CHECK] {name} try={retries+1}", flush=True)
+
         try:
             r = requests.post(
                 API,
@@ -98,9 +119,9 @@ def check(name):
                 data = r.json()
 
                 if data["taken"]:
-                    print(f"TAKEN : {name}")
+                    print(f"[TAKEN] {name}", flush=True)
                 else:
-                    print(f"OPEN  : {name}")
+                    print(f"[HIT] {name} AVAILABLE", flush=True)
 
                     with open("hits.txt", "a") as f:
                         f.write(name + "\n")
@@ -113,37 +134,47 @@ def check(name):
 
                 with request_lock:
                     if not use_proxies:
-                        print("RATE LIMIT → switching to proxies")
+                        print("[RATE LIMIT] switching to proxies", flush=True)
                         use_proxies = True
                     else:
-                        print("RATE LIMIT → rotating proxy")
+                        print("[RATE LIMIT] rotating proxy", flush=True)
 
                 retries += 1
                 time.sleep(1)
-                continue
 
             else:
-                print(f"ERROR {r.status_code} : {name}")
+                print(f"[ERROR] {name} status={r.status_code}", flush=True)
                 return
 
-        except Exception:
-            print(f"REQUEST ERROR : {name}")
+        except Exception as e:
+            print(f"[REQUEST ERROR] {name} error={e}", flush=True)
             retries += 1
             time.sleep(1)
 
-    print(f"GAVE UP : {name}")
+    print(f"[FAIL] {name}", flush=True)
 
 
-def worker():
-    while not q.empty():
-        name = q.get()
+def worker(names):
+    for name in names:
         check(name)
-        q.task_done()
 
 
-for _ in range(THREADS):
-    threading.Thread(target=worker, daemon=True).start()
+while True:
 
-q.join()
+    batch = generate_batch()
 
-print("Done")
+    print("[BATCH] Starting checks", flush=True)
+
+    chunks = [batch[i::THREADS] for i in range(THREADS)]
+
+    threads = []
+
+    for i in range(THREADS):
+        t = threading.Thread(target=worker, args=(chunks[i],))
+        t.start()
+        threads.append(t)
+
+    for t in threads:
+        t.join()
+
+    print("[BATCH] Completed 700 usernames\n", flush=True)
