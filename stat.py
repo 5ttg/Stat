@@ -9,8 +9,8 @@ import string
 API = "https://discord.com/api/v9/unique-username/username-attempt-unauthed"
 WEBHOOK = os.getenv("WEBHOOK_URL")
 
-THREADS = 5
-COOLDOWN = 1.5
+THREADS = 2
+COOLDOWN = 2.5
 MAX_RETRIES = 5
 BATCH_SIZE = 700
 
