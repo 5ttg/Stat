@@ -37,7 +37,7 @@ cooldown_lock = threading.Lock()
 
 
 def generate_name():
-    length = random.choice([3, 4])
+    length = random.choice([3, 4, 5])
     return "".join(random.choice(charset) for _ in range(length))
 
 
