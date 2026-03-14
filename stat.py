@@ -9,9 +9,9 @@ API = "https://discord.com/api/v9/unique-username/username-attempt-unauthed"
 WEBHOOK = os.getenv("WEBHOOK_URL")
 
 BATCH_SIZE = 700
-COOLDOWN = 1.3
+COOLDOWN = 1.8
 
-charset = string.ascii_lowercase + string.digits + "_"
+charset = string.ascii_lowercase + string.digits + "_" + "."
 
 print("[BOOT] Username checker starting", flush=True)
 print("[BOOT] Webhook loaded:", bool(WEBHOOK), flush=True)
