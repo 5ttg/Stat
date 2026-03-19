@@ -9,7 +9,7 @@ API = "https://discord.com/api/v9/unique-username/username-attempt-unauthed"
 WEBHOOK = os.getenv("WEBHOOK_URL")
 
 BATCH_SIZE = 700
-COOLDOWN = 5
+COOLDOWN = 5.0          # base sleep
 JITTER = 0.8
 
 charset = string.ascii_lowercase + string.digits + "_" + "."
@@ -33,7 +33,6 @@ def generate_batch():
     batch = list(names)
     print(f"[BATCH] Generated {len(batch)} usernames", flush=True)
     return batch
-
 
 def send_webhook(name):
     if not WEBHOOK:
@@ -102,7 +101,6 @@ def main():
         print(f"[BATCH DONE] {len(batch)} usernames checked", flush=True)
         # Optional: small pause between batches
         time.sleep(2)
-
 
 if __name__ == "__main__":
     try:
