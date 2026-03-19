@@ -5,6 +5,10 @@ on:
   schedule:
     - cron: "*/2 * * * *"
 
+permissions:
+  actions: write          # ← This is the key line needed for workflow_dispatch trigger
+  contents: read          # Usually already implicit, but good to have for checkout
+
 jobs:
   run-checker:
     runs-on: ubuntu-latest
@@ -21,12 +25,9 @@ jobs:
       - name: Run Checker
         env:
           WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK }}
-          # Optional: add GITHUB_TOKEN only if you need it for something else
-          # GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: python stat.py
 
-      # This step runs even if the python script hits sys.exit() or fails
-      - name: Trigger new run (only when rate-limited or job ends)
+      - name: Trigger new run
         if: always()
         run: |
           echo "Current run finished → triggering a new one"
@@ -34,5 +35,5 @@ jobs:
             -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
             -H "Accept: application/vnd.github+json" \
             -H "X-GitHub-Api-Version: 2022-11-28" \
-            https://api.github.com/repos/${{ github.repository }}/actions/workflows/${{ github.workflow }}/dispatches \
+            https://api.github.com/repos/${{ github.repository }}/actions/workflows/${{ github.workflow_ref }}/dispatches \
             -d '{"ref":"${{ github.ref_name }}"}'
