@@ -11,7 +11,7 @@ WEBHOOK = os.getenv("WEBHOOK_URL")
 BATCH_SIZE = 700
 COOLDOWN = 5
 
-charset = string.ascii_lowercase + "_" + "."
+charset = string.ascii_lowercase + string.digits + "_" + "."
 
 print("[BOOT] Username checker starting", flush=True)
 print("[BOOT] Webhook loaded:", bool(WEBHOOK), flush=True)
