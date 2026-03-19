@@ -10,6 +10,7 @@ WEBHOOK = os.getenv("WEBHOOK_URL")
 
 BATCH_SIZE = 700
 COOLDOWN = 5
+JITTER = 0.8
 
 charset = string.ascii_lowercase + string.digits + "_" + "."
 
@@ -25,25 +26,18 @@ def generate_name():
     length = random.choice([3, 4])
     return "".join(random.choice(charset) for _ in range(length))
 
-
 def generate_batch():
     names = set()
-
     while len(names) < BATCH_SIZE:
         names.add(generate_name())
-
     batch = list(names)
-
     print(f"[BATCH] Generated {len(batch)} usernames", flush=True)
-
     return batch
 
 
 def send_webhook(name):
     if not WEBHOOK:
-        print("[WEBHOOK] Not configured", flush=True)
         return
-
     try:
         data = {
             "content": "@everyone",
@@ -54,68 +48,67 @@ def send_webhook(name):
                 "color": 5763719
             }]
         }
-
-        r = session.post(WEBHOOK, json=data, timeout=5)
-
-        print(f"[WEBHOOK] Sent alert for {name} status={r.status_code}", flush=True)
-
+        r = session.post(WEBHOOK, json=data, timeout=6)
+        print(f"[WEBHOOK] Alert for {name} — status={r.status_code}", flush=True)
     except Exception as e:
-        print("[WEBHOOK ERROR]", e, flush=True)
+        print(f"[WEBHOOK ERROR] {e}", flush=True)
 
 
 def check(name):
-
     try:
         r = session.post(
             API,
             json={"username": name},
-            timeout=10
+            timeout=12
         )
 
         if r.status_code == 200:
-
             data = r.json()
-
-            if data["taken"]:
+            if data.get("taken", True):
                 print(f"[TAKEN] {name}", flush=True)
             else:
                 print(f"[HIT] {name} AVAILABLE", flush=True)
-
-                with open("hits.txt", "a") as f:
+                with open("hits.txt", "a", encoding="utf-8") as f:
                     f.write(name + "\n")
-
                 send_webhook(name)
 
         elif r.status_code == 429:
-
             retry = r.headers.get("Retry-After", "unknown")
-
-            print("[RATE LIMIT] hit — retry after:", retry, flush=True)
-            print("[EXIT] Ending run so workflow restarts", flush=True)
-
-            sys.exit(0)
+            print(f"[RATE LIMIT] 429 — Retry-After: {retry}", flush=True)
+            print("[EXIT] Stopping this run → workflow will trigger a new one", flush=True)
+            sys.exit(0)   # ← this is the key line
 
         else:
-            print(f"[ERROR] {name} status={r.status_code}", flush=True)
+            print(f"[ERROR] {name} — status={r.status_code}", flush=True)
 
     except Exception as e:
-        print(f"[REQUEST ERROR] {name} {e}", flush=True)
+        print(f"[REQUEST ERROR] {name} — {e}", flush=True)
 
 
 def main():
+    batch_count = 0
 
-    batch = generate_batch()
+    while True:
+        batch_count += 1
+        print(f"\n===== Starting batch #{batch_count} =====", flush=True)
 
-    for i, name in enumerate(batch, 1):
+        batch = generate_batch()
 
-        print(f"[CHECK {i}/{BATCH_SIZE}] {name}", flush=True)
+        for i, name in enumerate(batch, 1):
+            print(f"[CHECK {i:3d}/{BATCH_SIZE}] {name}", flush=True)
+            check(name)
+            time.sleep(random.uniform(COOLDOWN, COOLDOWN + JITTER))
 
-        check(name)
-
-        time.sleep(random.uniform(COOLDOWN, COOLDOWN + 0.8))
-
-    print("[DONE] Finished batch of 700 usernames", flush=True)
+        print(f"[BATCH DONE] {len(batch)} usernames checked", flush=True)
+        # Optional: small pause between batches
+        time.sleep(2)
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except KeyboardInterrupt:
+        print("[INTERRUPT] Stopped by user", flush=True)
+    except Exception as e:
+        print(f"[FATAL] {e}", flush=True)
+        sys.exit(1)
