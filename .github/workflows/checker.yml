@@ -3,7 +3,7 @@ name: Checker
 on:
   workflow_dispatch:
   schedule:
-    - cron: "*/2 * * * *"
+    - cron: "*/5 * * * *"
 
 permissions:
   actions: write          # ← This is the key line needed for workflow_dispatch trigger
