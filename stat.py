@@ -12,7 +12,7 @@ BATCH_SIZE = 700
 COOLDOWN = 2.5          # base sleep
 JITTER = 0.8
 
-charset = string.ascii_lowercase + string.digits + "_" + "."
+charset = string.ascii_lowercase + "_" + "."
 
 print("[BOOT] Username checker starting", flush=True)
 print("[BOOT] Webhook loaded:", bool(WEBHOOK), flush=True)
@@ -23,7 +23,7 @@ session.headers.update({
 })
 
 def generate_name():
-    length = random.choice([3])
+    length = random.choice([4])
     return "".join(random.choice(charset) for _ in range(length))
 
 def generate_batch():
