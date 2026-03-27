@@ -9,7 +9,7 @@ API = "https://discord.com/api/v9/unique-username/username-attempt-unauthed"
 WEBHOOK = os.getenv("WEBHOOK_URL")
 
 BATCH_SIZE = 700
-COOLDOWN = 2.5          # base sleep
+COOLDOWN = 5          # base sleep
 JITTER = 0.8
 
 charset = string.ascii_lowercase + "_" + "."
