@@ -12,7 +12,7 @@ BATCH_SIZE = 700
 COOLDOWN = 5          # base sleep
 JITTER = 0.8
 
-charset = string.ascii_lowercase + "_" + "."
+charset = string.digits + "_" + "." # string.ascii_lowercase
 
 print("[BOOT] Username checker starting", flush=True)
 print("[BOOT] Webhook loaded:", bool(WEBHOOK), flush=True)
